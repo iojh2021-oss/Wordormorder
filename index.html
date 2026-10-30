@@ -8,7 +8,19 @@
 <main id="views"><section class="panel" id="p1"><canvas id="top"></canvas><div class="tag"><b>▲ زمان اصلی</b> · حرکت به جلو</div><div class="hud" id="h1">۰٪ · امتیاز ۰</div></section><div id="divider">⇅</div><section class="panel reverse" id="p2"><canvas id="bottom"></canvas><div class="tag"><b>▼ زمان وارونه</b> · بازگشت از انتها</div><div class="hud" id="h2">۱۰۰٪ · وارون</div></section></main>
 <footer><div class="row"><div class="group"><button data-key="ArrowLeft">◀</button><button data-key="ArrowUp">▲</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button><button data-key="Space">پرش</button></div><div class="group"><button id="play">شروع</button><button id="sound">صدا روشن</button><button id="reset">از نو ↻</button></div></div><div id="message">جهت‌ها/WASD: حرکت و چرخش دوربین · جمع‌آوری کریستال‌ها · عبور از موانع · <span id="result">بهترین رکورد: ۰</span></div></footer></div>
 <script type="module">
-import * as THREE from 'three';
+let THREE;
+try { THREE = await import('three'); }
+catch(firstError) {
+  try { THREE = await import('https://unpkg.com/three@0.160.0/build/three.module.js'); }
+  catch(secondError) {
+    try { THREE = await import('https://esm.sh/three@0.160.0'); }
+    catch(finalError) {
+      document.querySelectorAll('.panel').forEach(p=>{p.innerHTML='<div style="position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#ffd27b;line-height:2">کتابخانه سه‌بعدی بارگذاری نشد.<br>اتصال اینترنت یا دسترسی به CDN را بررسی و صفحه را دوباره بارگذاری کن.<br><small style="color:#a9bdd5">WebGL / Three.js unavailable</small></div>';});
+      throw finalError;
+    }
+  }
+}
+try {
 const $=id=>document.getElementById(id), L=108, stageNames=['دره‌ی سپیده','جنگل نیمه‌شب','پل آینه‌ای'];
 const themes=[{sky:0x9b9eb6,fog:0x9b9eb6,ground:0x263b43,glow:0xffd18b},{sky:0x09152c,fog:0x09152c,ground:0x102326,glow:0x70e8da},{sky:0x59456f,fog:0x59456f,ground:0x29334c,glow:0xe8baff}];
 let progress=0,x=0,velY=0,jump=0,yaw=0,score=0,playing=false,won=false,keys=new Set(),soundOn=true,ac=null,musicTimer=0,elapsed=0,items=[],hazards=[],collected=new Set(),hitFlash=0;
@@ -47,10 +59,22 @@ function resize(){for(const w of [A,B]){const r=w.renderer.domElement.getBoundin
 function themeWorld(w,p){const idx=Math.min(2,Math.floor(p*3));const t=themes[idx];w.scene.background=new THREE.Color(t.sky);w.scene.fog.color.setHex(t.fog);w.ground.material.color.setHex(t.ground);w.sun.color.setHex(t.glow);}
 function animateWorld(w,p,rev,now){const z=-p*L,xx=x*(rev?-1:1),avatar=w.avatar;avatar.position.set(xx,jump,rev?z-L:z);avatar.rotation.y=(rev?-yaw:yaw);const gait=playing&&jump<.1?Math.sin(now*12)*.62:0;w.limbParts.forEach((part,i)=>{part.rotation.x=(i%2===0?1:-1)*gait;});w.camera.position.set(xx*.72+(rev?0:0),3.5+jump*.45,(rev?z-L+7:z+7));const look=new THREE.Vector3(xx*.7,1.3+jump*.2,(rev?z-L-8:z-8));w.camera.lookAt(look);w.camera.rotation.z=rev?-yaw*.16:yaw*.16;w.localItems.forEach(it=>{it.mesh.rotation.y=now*.8+it.id;it.mesh.rotation.x=now*.5;if(collected.has(it.id))it.mesh.visible=false;});w.localHazards.forEach(h=>h.mesh.rotation.y=Math.sin(now+h.id)*.08);themeWorld(w,p);w.renderer.render(w.scene,w.camera);}
 function updateUI(){const p=Math.round(progress*100);$('h1').textContent=p+'٪ · امتیاز '+score+' · کریستال '+collected.size+'/15';$('h2').textContent=(100-p)+'٪ · تصویر معکوس';const s=Math.min(2,Math.floor(progress*3));$('stage').textContent='مرحله '+(s+1)+' از ۳ · '+stageNames[s];}
-function initAudio(){if(!soundOn)return;if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();}
-function playNote(freq,time,duration,gain,reverse=false){if(!ac||!soundOn)return;const n=Math.max(256,Math.floor(ac.sampleRate*duration)),buf=ac.createBuffer(1,n,ac.sampleRate),d=buf.getChannelData(0);for(let i=0;i<n;i++){const j=reverse?n-1-i:i;const env=Math.sin(Math.PI*j/n)**1.5;d[i]=Math.sin(2*Math.PI*freq*j/ac.sampleRate)*env*.5;}const src=ac.createBufferSource(),g=ac.createGain();src.buffer=buf;g.gain.value=gain;src.connect(g);g.connect(ac.destination);src.start(time);}
-const melody=[196,246.94,293.66,392,329.63,293.66,246.94,220];function musicTick(){if(!playing||!soundOn||!ac)return;const t=ac.currentTime;const i=Math.floor(elapsed*1.5)%melody.length;playNote(melody[i],t,.42,.045,false);playNote(melody[i]*.5,t,.42,.022,true);playNote(melody[7-i%8]*.75,t,.42,.028,true);musicTimer=setTimeout(musicTick,430);}
-function sfx(freq=520){if(!ac||!soundOn)return;playNote(freq,ac.currentTime,.14,.09,false);}
+function initAudio(){if(!soundOn)return;if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();buildMusic();}
+function synthBuffer(reverse=false){
+ const duration=8,frames=Math.floor(ac.sampleRate*duration),buffer=ac.createBuffer(2,frames,ac.sampleRate);
+ const notes=[196,246.94,293.66,392,329.63,293.66,246.94,220];
+ for(let ch=0;ch<2;ch++){const data=buffer.getChannelData(ch);for(let i=0;i<frames;i++){const t=i/ac.sampleRate,beat=Math.floor(t/.5)%8,local=(t% .5)/.5;const env=Math.pow(Math.sin(Math.PI*local),1.5);const f=notes[beat]*(ch===0?1:.5);let sample=Math.sin(2*Math.PI*f*t)*.34+Math.sin(2*Math.PI*f*2*t)*.09;sample+=Math.sin(2*Math.PI*notes[(beat+2)%8]*t)*.06;data[i]=sample*env;}}
+ if(reverse){for(let ch=0;ch<2;ch++){const d=buffer.getChannelData(ch);for(let i=0,j=d.length-1;i<j;i++,j--){const v=d[i];d[i]=d[j];d[j]=v;}}}
+ return buffer;
+}
+let musicSources=[];
+function stopMusic(){musicSources.forEach(s=>{try{s.stop()}catch(e){}});musicSources=[];}
+function buildMusic(){if(!ac||musicSources.length)return;const original=synthBuffer(false),reversed=synthBuffer(true);
+ for(const [buffer,pan] of [[original,-.48],[reversed,.48]]){const src=ac.createBufferSource(),gain=ac.createGain(),panner=ac.createStereoPanner();src.buffer=buffer;src.loop=true;gain.gain.value=.20;panner.pan.value=pan;src.connect(gain);gain.connect(panner);panner.connect(ac.destination);src.start();musicSources.push(src);}
+}
+function musicTick(){if(playing&&soundOn&&ac)buildMusic();}
+function playNote(freq,time,duration,gain){if(!ac||!soundOn)return;const n=Math.max(256,Math.floor(ac.sampleRate*duration)),buf=ac.createBuffer(1,n,ac.sampleRate),d=buf.getChannelData(0);for(let i=0;i<n;i++){const env=Math.sin(Math.PI*i/n)**1.5;d[i]=Math.sin(2*Math.PI*freq*i/ac.sampleRate)*env*.5;}const src=ac.createBufferSource(),g=ac.createGain();src.buffer=buf;g.gain.value=gain;src.connect(g);g.connect(ac.destination);src.start(time);}
+function sfx(freq=520){if(!ac||!soundOn)return;playNote(freq,ac.currentTime,.14,.09);}
 function completeStage(){const stage=Math.min(2,Math.floor(progress*3));if(stage<2&&progress>=(stage+1)/3){score+=100;}}
 function tick(dt,now){if(playing){elapsed+=dt;let forward=(keys.has('ArrowUp')||keys.has('w'))?1:0;let backward=(keys.has('ArrowDown')||keys.has('s'))?1:0;progress=THREE.MathUtils.clamp(progress+(forward-backward)*dt*.075,0,1);if(keys.has('ArrowLeft')||keys.has('a'))yaw=THREE.MathUtils.clamp(yaw+dt*1.5,-.65,.65);if(keys.has('ArrowRight')||keys.has('d'))yaw=THREE.MathUtils.clamp(yaw-dt*1.5,-.65,.65);if(keys.has('ArrowLeft')||keys.has('a'))x=THREE.MathUtils.clamp(x-dt*3.2,-3.1,3.1);if(keys.has('ArrowRight')||keys.has('d'))x=THREE.MathUtils.clamp(x+dt*3.2,-3.1,3.1);
  if(jump>0||velY>0){jump+=velY*dt;velY-=10*dt;if(jump<=0){jump=0;velY=0;}}
@@ -60,11 +84,16 @@ function tick(dt,now){if(playing){elapsed+=dt;let forward=(keys.has('ArrowUp')||
  animateWorld(A,progress,false,now);animateWorld(B,1-progress,true,now);updateUI();requestAnimationFrame(loop);}
 let last=0;function loop(ms){const now=ms/1000,dt=Math.min(.04,(ms-last)/1000||0);last=ms;tick(dt,now);}
 requestAnimationFrame(loop);
-function start(){initAudio();if(won)reset();playing=!playing;$('play').textContent=playing?'توقف':'ادامه';if(playing)musicTick();}
+function start(){initAudio();if(won)reset();playing=!playing;$('play').textContent=playing?'توقف':'ادامه';if(playing)musicTick();else stopMusic();}
 function reset(){progress=0;x=0;yaw=0;jump=0;velY=0;score=0;elapsed=0;playing=false;won=false;collected.clear();A.localItems.concat(B.localItems).forEach(i=>i.mesh.visible=true);$('play').textContent='شروع';$('message').firstChild.textContent='جهت‌ها/WASD: حرکت و چرخش دوربین · جمع‌آوری کریستال‌ها · عبور از موانع · ';}
-$('play').onclick=start;$('reset').onclick=reset;$('sound').onclick=()=>{soundOn=!soundOn;$('sound').textContent='صدا '+(soundOn?'روشن':'خاموش');if(soundOn)initAudio();};
+$('play').onclick=start;$('reset').onclick=reset;$('sound').onclick=()=>{soundOn=!soundOn;$('sound').textContent='صدا '+(soundOn?'روشن':'خاموش');if(soundOn){initAudio();if(playing)buildMusic();}else stopMusic();};
 function press(k){if(k==='Space'){if(jump===0&&playing){velY=5.5;sfx(650);}return;}keys.add(k);}function release(k){keys.delete(k);}
 window.addEventListener('keydown',e=>{const k=e.code==='Space'?'Space':e.key.length===1?e.key.toLowerCase():e.key;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(k))e.preventDefault();if(!e.repeat)press(k);});window.addEventListener('keyup',e=>release(e.code==='Space'?'Space':e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',()=>keys.clear());
 document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();initAudio();press(k);b.classList.add('active');});for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>{release(k);b.classList.remove('active');});});
 })();
+} catch(error) {
+ const msg=(error&&error.message)?error.message:String(error);
+ document.querySelectorAll('.panel').forEach(p=>{const box=document.createElement('div');box.style.cssText='position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#ffd27b;line-height:2;background:#101b2b';box.innerHTML='خطا در راه‌اندازی موتور سه‌بعدی<br><small style="color:#b8c8d9"></small>';box.querySelector('small').textContent=msg;p.appendChild(box);});
+ console.error('Waroon startup error:',error);
+}
 </script></body></html>
