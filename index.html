@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#080d1c"><title>وارون | بازی دو سوی زمان</title>
+<style>
+:root{color-scheme:dark;--line:#ffffff25;--cyan:#6ff7ee;--gold:#ffd27b}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050914;color:#fff;font-family:Tahoma,Arial,sans-serif}
+#app{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;background:radial-gradient(ellipse at 50% 0%,#17233b,#050914 65%)}
+header{height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.4px}
+.brand{font-weight:900;color:var(--cyan);font-size:16px}.status{color:#c3d2e8}
+#views{min-height:0;display:grid;grid-template-rows:1fr 1fr;gap:3px;padding:3px;position:relative}
+.panel{position:relative;overflow:hidden;border:1px solid #ffffff25;border-radius:9px;background:#101a2b;min-height:0}
+canvas{display:block;width:100%;height:100%}
+.panel-label{position:absolute;top:9px;right:10px;z-index:2;background:#07101dcc;border:1px solid #ffffff30;padding:6px 10px;border-radius:20px;font-size:11px;backdrop-filter:blur(8px)}
+.panel-label b{color:var(--cyan)}.reverse .panel-label b{color:#ffbd8d}
+.hud{position:absolute;left:10px;top:9px;z-index:2;font-size:10px;color:#d9e7f5;background:#07101dcc;padding:6px 9px;border-radius:15px}
+#divider{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:42px;height:22px;border-radius:20px;background:#0b1425;border:1px solid #ffffff55;display:grid;place-items:center;color:var(--gold);font-size:12px}
+footer{padding:7px 10px max(8px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#080d19}
+.controls{display:flex;align-items:center;justify-content:space-between;gap:8px;max-width:900px;margin:auto}
+.group{display:flex;gap:6px;align-items:center}
+button{border:1px solid #ffffff30;background:linear-gradient(180deg,#1b2a43,#0d1729);color:white;border-radius:12px;padding:10px 13px;font-size:12px;min-width:42px;touch-action:none}
+button:active,button.active{background:#1b5260;border-color:var(--cyan)}
+#start{background:linear-gradient(120deg,#087c84,#3159a5);font-weight:bold;min-width:92px}
+#hint{font-size:10px;color:#a9bad0;text-align:center;margin-top:5px}
+@media(min-width:800px){header{height:52px;padding-inline:24px}#views{padding:7px;gap:6px}.panel-label{font-size:13px;padding:8px 13px}button{padding:12px 17px;font-size:13px}footer{padding:10px}}
+</style></head>
+<body><div id="app">
+<header><div><span class="brand">وارون</span> <span class="status">/ دو سوی یک مسیر</span></div><div class="status" id="stageText">مرحله ۱ از ۳ · دره‌ی سپیده</div></header>
+<main id="views">
+<section class="panel"><canvas id="top"></canvas><div class="panel-label"><b>▲ مسیر رو به جلو</b> · زمان اصلی</div><div class="hud" id="topHud">۰٪ · روز</div></section>
+<div id="divider">⇅</div>
+<section class="panel reverse"><canvas id="bottom"></canvas><div class="panel-label"><b>▼ مسیر وارونه</b> · بازگشت از پایان</div><div class="hud" id="bottomHud">۱۰۰٪ · شب</div></section>
+</main>
+<footer><div class="controls">
+<div class="group"><button data-key="ArrowLeft">◀</button><button data-key="ArrowUp">▲</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div>
+<div class="group"><button id="start">شروع بازی</button><button id="sound">صدا: روشن</button><button id="reset">از نو ↻</button></div>
+</div><div id="hint">حرکت: کلیدهای جهت‌نما یا WASD · روی موبایل از دکمه‌ها استفاده کن · هر دو نیمه هم‌زمان و وارونه پیش می‌روند</div></footer>
+</div>
+<script>
+(()=> {
+const topCanvas=document.getElementById('top'), botCanvas=document.getElementById('bottom');
+const ctxA=topCanvas.getContext('2d'),ctxB=botCanvas.getContext('2d');
+const stages=[{name:'دره‌ی سپیده',sky:['#f28c63','#f5c77b','#243c61'],ground:'#293c3a',accent:'#ffc878'},
+{name:'جنگل نیمه‌شب',sky:['#08142e','#263d65','#101b2a'],ground:'#101d20',accent:'#74e5d6'},
+{name:'پل آینه‌ای',sky:['#6a467b','#db8c9a','#273b59'],ground:'#263044',accent:'#e4c8ff'}];
+let progress=0,playing=false,last=0,keys=new Set(),soundOn=true,audio=null,stepClock=0,elapsed=0;
+const total=3,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function resize(){for(const c of [topCanvas,botCanvas]){const r=c.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);c.width=Math.max(1,Math.floor(r.width*d));c.height=Math.max(1,Math.floor(r.height*d));}}
+new ResizeObserver(resize).observe(document.getElementById('views'));resize();
+function audioInit(){if(!soundOn)return;if(!audio){audio=new(window.AudioContext||window.webkitAudioContext)();}if(audio.state==='suspended')audio.resume();}
+function tone(freq,dur,when,vol=.035,wave='sine',reverse=false){if(!audio||!soundOn)return;const o=audio.createOscillator(),g=audio.createGain();o.type=wave;o.frequency.setValueAtTime(freq,when);g.gain.setValueAtTime(.0001,when);g.gain.exponentialRampToValueAtTime(vol,when+.025);g.gain.exponentialRampToValueAtTime(.0001,when+dur);o.connect(g);g.connect(audio.destination);o.start(when);o.stop(when+dur+.03);}
+function music(){if(!audio||!soundOn)return;const now=audio.currentTime;const notes=[220,261.63,329.63,392,329.63,293.66,246.94,196];const ix=Math.floor(elapsed*1.3)%notes.length;tone(notes[ix],.55,now,.018,'triangle');tone(notes[(ix+2)%notes.length]*2,.35,now+.08,.008,'sine');}
+function footstep(){if(!audio||!soundOn)return;const n=audio.currentTime;tone(78,.10,n,.035,'triangle');tone(48,.08,n+.02,.018,'sine');}
+function rounded(c,x,y,w,h,r){c.beginPath();c.roundRect(x,y,w,h,r);c.fill();}
+function drawScene(ctx,canvas,p,reverse,dt){
+ const w=canvas.width,h=canvas.height;if(!w||!h)return;
+ const stageIndex=Math.min(2,Math.floor(p*3)),local=(p*3)%1,st=stages[stageIndex],night=(Math.sin(p*Math.PI*2-Math.PI/2)+1)/2;
+ const grad=ctx.createLinearGradient(0,0,0,h*.72);
+ grad.addColorStop(0,st.sky[0]);grad.addColorStop(.55,st.sky[1]);grad.addColorStop(1,st.sky[2]);
+ ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
+ const horizon=h*.47;
+ // celestial body: day on one side, night on the other
+ const cx=w*(.78-.55*p),cy=h*(.18+.07*Math.sin(p*6.28));
+ ctx.globalAlpha=.9;ctx.fillStyle=night>.52?'#e7edff':'#ffe7a0';ctx.beginPath();ctx.arc(cx,cy,Math.max(9,h*.045),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+ if(night>.35){let seed=17;for(let i=0;i<42;i++){seed=(seed*9301+49297)%233280;const x=(seed/233280)*w;seed=(seed*9301+49297)%233280;const y=(seed/233280)*horizon*.8;ctx.fillStyle='rgba(255,255,255,'+(.25+(seed%60)/100)+')';ctx.fillRect(x,y,1.5,1.5);}}
+ // distant mountain silhouettes
+ ctx.fillStyle='#142238aa';ctx.beginPath();ctx.moveTo(0,horizon);for(let x=0;x<=w+40;x+=40){const yy=horizon*.74+Math.sin(x*.012+p*5)*h*.06+Math.cos(x*.027)*h*.035;ctx.lineTo(x,yy);}ctx.lineTo(w,horizon);ctx.closePath();ctx.fill();
+ // floor perspective
+ const floor=ctx.createLinearGradient(0,horizon,0,h);floor.addColorStop(0,st.ground);floor.addColorStop(1,'#080e18');ctx.fillStyle=floor;ctx.fillRect(0,horizon,w,h-horizon);
+ // perspective road
+ const center=w/2,vanY=horizon*.98;
+ ctx.fillStyle=reverse?'#263344':'#33404b';ctx.beginPath();ctx.moveTo(center-w*.055,vanY);ctx.lineTo(center+w*.055,vanY);ctx.lineTo(center+w*.48,h);ctx.lineTo(center-w*.48,h);ctx.closePath();ctx.fill();
+ ctx.strokeStyle=st.accent+'66';ctx.lineWidth=Math.max(1,w*.002);ctx.beginPath();ctx.moveTo(center-w*.055,vanY);ctx.lineTo(center-w*.48,h);ctx.moveTo(center+w*.055,vanY);ctx.lineTo(center+w*.48,h);ctx.stroke();
+ // floor markers flow in opposite directions
+ for(let i=0;i<12;i++){const z=((i/12+(reverse?1-p:p)*1.7)%1);const y=vanY+(h-vanY)*z*z;const span=(y-vanY)*.55;ctx.strokeStyle=st.accent+(i%2?'33':'66');ctx.lineWidth=1+z*2;ctx.beginPath();ctx.moveTo(center-span,y);ctx.lineTo(center+span,y);ctx.stroke();}
+ // archway and trees, distance changes with travel
+ for(let i=0;i<7;i++){let z=((i/7+(reverse?1-p:p)*1.35)%1);let y=vanY+(h-vanY)*z*z;let scale=.12+z*1.4;let side=i%2?1:-1;let x=center+side*(w*.09+z*w*.37);
+ if(stageIndex===1){ctx.fillStyle='#09171a';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-w*.035*scale,y-h*.15*scale);ctx.lineTo(x+w*.035*scale,y-h*.15*scale);ctx.closePath();ctx.fill();ctx.fillRect(x-w*.008*scale,y-h*.02*scale,w*.016*scale,h*.06*scale);}
+ else {ctx.strokeStyle='#d9e7ed88';ctx.lineWidth=Math.max(1,4*scale);ctx.beginPath();ctx.moveTo(x-w*.04*scale,y-h*.15*scale);ctx.lineTo(x-w*.04*scale,y);ctx.moveTo(x+w*.04*scale,y-h*.15*scale);ctx.lineTo(x+w*.04*scale,y);ctx.stroke();ctx.beginPath();ctx.arc(x,y-h*.15*scale,w*.04*scale,Math.PI,0);ctx.stroke();}
+ }
+ // next gate at the end of each section
+ const gateZ=clamp(1-local,0,1),gy=vanY+(h-vanY)*gateZ*gateZ,gScale=.1+gateZ*.9;
+ ctx.strokeStyle=st.accent;ctx.lineWidth=Math.max(2,5*gScale);ctx.shadowColor=st.accent;ctx.shadowBlur=10*gScale;
+ ctx.beginPath();ctx.moveTo(center-w*.11*gScale,gy);ctx.lineTo(center-w*.11*gScale,gy-h*.24*gScale);ctx.quadraticCurveTo(center,gy-h*.34*gScale,center+w*.11*gScale,gy-h*.24*gScale);ctx.lineTo(center+w*.11*gScale,gy);ctx.stroke();ctx.shadowBlur=0;
+ // center compass / subtle first-person reticle
+ ctx.strokeStyle='#ffffffaa';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(center-7,h*.52);ctx.lineTo(center-2,h*.52);ctx.moveTo(center+2,h*.52);ctx.lineTo(center+7,h*.52);ctx.moveTo(center,h*.52-7);ctx.lineTo(center,h*.52-2);ctx.moveTo(center,h*.52+2);ctx.lineTo(center,h*.52+7);ctx.stroke();
+ // reverse-half visual mirror
+ if(reverse){ctx.save();ctx.translate(w,0);ctx.scale(-1,1);ctx.globalAlpha=.045;ctx.fillStyle='#ffb98e';ctx.fillRect(0,0,w,h);ctx.restore();}
+ // vignette
+ const vg=ctx.createRadialGradient(center,h*.52,h*.1,center,h*.52,h*.8);vg.addColorStop(.5,'transparent');vg.addColorStop(1,'#02061099');ctx.fillStyle=vg;ctx.fillRect(0,0,w,h);
+}
+function updateHud(){const pct=Math.round(progress*100);const day=(Math.sin(progress*Math.PI*2-Math.PI/2)+1)/2>.48?'روز':'شب';const back=(Math.sin((1-progress)*Math.PI*2-Math.PI/2)+1)/2>.48?'روز':'شب';document.getElementById('topHud').textContent=pct+'٪ · '+day;document.getElementById('bottomHud').textContent=(100-pct)+'٪ · '+back;document.getElementById('stageText').textContent='مرحله '+(Math.min(3,Math.floor(progress*3)+1))+' از ۳ · '+stages[Math.min(2,Math.floor(progress*3))].name;}
+function frame(t){const dt=Math.min(.05,(t-last)/1000||0);last=t;if(playing){let move=0;if(keys.has('ArrowUp')||keys.has('w'))move+=1;if(keys.has('ArrowDown')||keys.has('s'))move-=1;if(move){progress=clamp(progress+move*dt*.085,0,1);stepClock+=dt;if(stepClock>.27){footstep();stepClock=0;}}if(keys.has('ArrowLeft')||keys.has('a')){}if(keys.has('ArrowRight')||keys.has('d')){}elapsed+=dt;if(Math.floor(elapsed*1.3)!==Math.floor((elapsed-dt)*1.3))music();if(progress>=1){playing=false;document.getElementById('start').textContent='مرحله کامل شد ✓';}}
+ drawScene(ctxA,topCanvas,progress,false,dt);drawScene(ctxB,botCanvas,1-progress,true,dt);updateHud();requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+function begin(){audioInit();if(progress>=1)progress=0;playing=!playing;document.getElementById('start').textContent=playing?'توقف':'ادامه';}
+document.getElementById('start').addEventListener('click',begin);
+document.getElementById('reset').addEventListener('click',()=>{progress=0;elapsed=0;playing=false;document.getElementById('start').textContent='شروع بازی';});
+document.getElementById('sound').addEventListener('click',e=>{soundOn=!soundOn;e.currentTarget.textContent='صدا: '+(soundOn?'روشن':'خاموش');if(soundOn)audioInit();});
+window.addEventListener('keydown',e=>{const k=e.key.length===1?e.key.toLowerCase():e.key;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(k))e.preventDefault();keys.add(k);if(k===' '&&!e.repeat)begin();});
+window.addEventListener('keyup',e=>keys.delete(e.key.length===1?e.key.toLowerCase():e.key));
+window.addEventListener('blur',()=>keys.clear());
+document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();keys.add(k);b.classList.add('active');});for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>{keys.delete(k);b.classList.remove('active');});});
+})();
+</script></body></html>
