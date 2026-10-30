@@ -90,7 +90,6 @@ $('play').onclick=start;$('reset').onclick=reset;$('sound').onclick=()=>{soundOn
 function press(k){if(k==='Space'){if(jump===0&&playing){velY=5.5;sfx(650);}return;}keys.add(k);}function release(k){keys.delete(k);}
 window.addEventListener('keydown',e=>{const k=e.code==='Space'?'Space':e.key.length===1?e.key.toLowerCase():e.key;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(k))e.preventDefault();if(!e.repeat)press(k);});window.addEventListener('keyup',e=>release(e.code==='Space'?'Space':e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',()=>keys.clear());
 document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();initAudio();press(k);b.classList.add('active');});for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>{release(k);b.classList.remove('active');});});
-})();
 } catch(error) {
  const msg=(error&&error.message)?error.message:String(error);
  document.querySelectorAll('.panel').forEach(p=>{const box=document.createElement('div');box.style.cssText='position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#ffd27b;line-height:2;background:#101b2b';box.innerHTML='خطا در راه‌اندازی موتور سه‌بعدی<br><small style="color:#b8c8d9"></small>';box.querySelector('small').textContent=msg;p.appendChild(box);});
