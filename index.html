@@ -23,7 +23,8 @@ catch(firstError) {
 try {
 const $=id=>document.getElementById(id), L=108, stageNames=['دره‌ی سپیده','جنگل نیمه‌شب','پل آینه‌ای'];
 const themes=[{sky:0x9b9eb6,fog:0x9b9eb6,ground:0x263b43,glow:0xffd18b},{sky:0x09152c,fog:0x09152c,ground:0x102326,glow:0x70e8da},{sky:0x59456f,fog:0x59456f,ground:0x29334c,glow:0xe8baff}];
-let progress=0,x=0,velY=0,jump=0,yaw=0,score=0,playing=false,won=false,keys=new Set(),soundOn=true,ac=null,musicTimer=0,elapsed=0,items=[],hazards=[],collected=new Set(),hitFlash=0;\nlet shieldOn=false,scanUntil=0,mosquitoContact=0,mosquitoX=0,mosquitoSignal=false,mosquitoGroup=null,shieldMesh=null,scanRings=[];
+let progress=0,x=0,velY=0,jump=0,yaw=0,score=0,playing=false,won=false,keys=new Set(),soundOn=true,ac=null,musicTimer=0,elapsed=0,items=[],hazards=[],collected=new Set(),hitFlash=0;
+let shieldOn=false,scanUntil=0,mosquitoContact=0,mosquitoX=0,mosquitoSignal=false,mosquitoGroup=null,shieldMesh=null,scanRings=[];
 const bestKey='waroon-best-v2';let best=Number(localStorage.getItem(bestKey)||0);$('result').textContent='بهترین رکورد: '+best;
 function makeWorld(canvas,reverse){
  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
